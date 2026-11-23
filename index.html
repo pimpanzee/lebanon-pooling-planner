@@ -1,0 +1,287 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>NewCold Lebanon Pooling Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one working screen. Map left, live selection totals pinned in its top-right corner; state ledger underneath. */
+:root{
+  --bg:#f3f5f6; --panel:#ffffff; --ink:#14202a; --muted:#5b6b77; --line:#d6dde2;
+  --land:#e3e8ec; --land-hover:#d3dbe1; --sel:#bfe3e6; --sel-line:#0b6f7a;
+  --accent:#0b6f7a; --dot:#0b6f7a; --dot-dim:#8fa1ad; --cpu:#b8572b; --other:#6a5acd;
+  --f-display:"Archivo",system-ui,sans-serif; --f-body:"Inter",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f161b; --panel:#162028; --ink:#e6edf1; --muted:#93a4b0; --line:#28363f;
+  --land:#1f2b33; --land-hover:#28363f; --sel:#164a50; --sel-line:#5cc6cf;
+  --accent:#5cc6cf; --dot:#6fd3db; --dot-dim:#5b6b77; --cpu:#e08a5c; --other:#a99cf0; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f161b; --panel:#162028; --ink:#e6edf1; --muted:#93a4b0; --line:#28363f;
+  --land:#1f2b33; --land-hover:#28363f; --sel:#164a50; --sel-line:#5cc6cf;
+  --accent:#5cc6cf; --dot:#6fd3db; --dot-dim:#5b6b77; --cpu:#e08a5c; --other:#a99cf0; color-scheme:dark}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--f-body);font-size:14px;line-height:1.45;padding-block:20px 40px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1240px;margin:0 auto;display:grid;gap:18px}
+header{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px}
+h1{font-family:var(--f-display);font-weight:800;font-size:clamp(22px,3vw,30px);letter-spacing:-.01em;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0;max-width:70ch}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,.toggle{font:500 13px var(--f-body);color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:7px 11px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:focus-visible,.toggle:focus-within,tr:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.toggle{display:inline-flex;gap:7px;align-items:center}
+.toggle input{accent-color:var(--cpu);margin:0}
+.stage{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px}
+svg{display:block;width:100%;height:auto}
+.state{fill:var(--land);stroke:var(--panel);stroke-width:1;cursor:pointer;transition:fill .12s}
+.state:hover{fill:var(--land-hover)}
+.state.on{fill:var(--sel);stroke:var(--sel-line);stroke-width:1.4}
+.state:focus-visible{outline:none;stroke:var(--accent);stroke-width:2.5}
+.dot{fill:var(--dot);fill-opacity:.8;stroke:var(--panel);stroke-width:.8;pointer-events:all}
+.dot.dim{fill:var(--dot-dim);fill-opacity:.55}
+.dot.cpu{fill:none;stroke:var(--cpu);stroke-width:1.3;stroke-dasharray:2 1.5}
+.odot{fill:var(--other);fill-opacity:.35;stroke:var(--other);stroke-opacity:.8;stroke-width:.8;pointer-events:all}
+.odot.dim{fill:var(--dot-dim);fill-opacity:.18;stroke:var(--dot-dim);stroke-opacity:.4}
+.sw.o{background:var(--other);opacity:.6}
+.shippers{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:13px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.shippers label{display:inline-flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap}
+.shippers input{accent-color:var(--other);margin:0}
+.shippers .eyebrow{margin-right:4px}
+.otab{display:grid;grid-template-columns:1fr auto auto;gap:3px 10px;font-size:13px;margin:0}
+.otab span{font:500 13px var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+.otab .h{font:600 11px var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:right}
+.otab .h:first-child{text-align:left}
+.otab .nm{font-family:var(--f-body);text-align:left}
+.otab .tot{border-top:1px solid var(--line);padding-top:4px;font-weight:600}
+.otab small{color:var(--muted);font-size:11px;margin-left:3px}
+td.oth{color:var(--other)}
+.depot{fill:var(--ink)}
+.depot-label{font:600 11px var(--f-body);fill:var(--ink)}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;padding:6px 8px;border-radius:5px;max-width:240px;line-height:1.35}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:8px;width:290px;align-content:start}
+.layout{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:900px){.layout{grid-template-columns:minmax(0,1fr) 300px;position:relative}.stage{grid-column:1;grid-row:1}.panel{grid-column:2;grid-row:1;position:absolute;inset:0;overflow-y:auto}}
+.panel{width:auto}
+.eyebrow{font:600 11px var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:4px;min-height:22px}
+.chip{font:500 12px var(--f-mono);background:var(--sel);color:var(--ink);border-radius:4px;padding:2px 6px;border:0;cursor:pointer}
+.empty{color:var(--muted);font-size:13px}
+.big{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.big div{display:grid;gap:2px}
+.big b{font:700 26px var(--f-display);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.big em{font:500 12px var(--f-mono);font-style:normal;color:var(--muted);font-variant-numeric:tabular-nums}
+.big span,.small dt{font-size:12px;color:var(--muted)}
+.small{display:grid;grid-template-columns:1fr auto;gap:3px 10px;margin:0;font-size:13px}
+.small dd{margin:0;font:500 13px var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+.weeks{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;align-items:end;height:54px}
+.wk{display:grid;gap:2px;align-items:end;height:100%;grid-template-rows:1fr auto}
+.wk i{display:flex;flex-direction:column;justify-content:flex-end;align-self:end;min-height:1px}
+.wk i b{display:block;background:var(--accent)}
+.wk i u{display:block;background:var(--dot-dim);opacity:.6;border-radius:2px 2px 0 0}
+.wk i b:first-child{border-radius:2px 2px 0 0}
+.wk small{font:500 10px var(--f-mono);color:var(--muted);text-align:center}
+.wk small em{font-style:normal;color:var(--ink);font-weight:600}
+.note{font-size:12px;color:var(--muted)}
+.cpuline{color:var(--cpu)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);padding:4px 6px 0}
+.legend span{display:inline-flex;gap:6px;align-items:center}
+.sw{width:10px;height:10px;border-radius:50%;background:var(--dot);display:inline-block}
+.sw.c{background:none;border:1.5px dashed var(--cpu)}
+.sw.s{border-radius:2px;background:var(--sel);border:1px solid var(--sel-line)}
+.ledger{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:7px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+th small{font-weight:500;letter-spacing:0;text-transform:none}
+th{font:600 11px var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);cursor:pointer;user-select:none;position:sticky;top:0;background:var(--panel)}
+td{font-variant-numeric:tabular-nums;font-family:var(--f-mono)}
+td:nth-child(2){font-family:var(--f-body)}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--land)}
+tbody tr.on{background:var(--sel)}
+td.cpu{color:var(--cpu)}
+td small{color:var(--muted);font-size:11px;margin-left:4px}
+.focus{font-size:12px;color:var(--muted);margin-top:-4px}
+input[type=checkbox]{accent-color:var(--accent)}
+@media (prefers-reduced-motion:reduce){.state{transition:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>NewCold Lebanon Pooling Planner</h1>
+      <p class="sub">Order data from June 2026. Click state to build a plan</p>
+    </div>
+    <div class="controls">
+      <button id="clear" type="button">Clear selection</button>
+    </div>
+  </header>
+
+  <div class="shippers" id="shippers" role="group" aria-labelledby="shLbl"><span class="eyebrow" id="shLbl">Shippers</span></div>
+
+  <div class="layout">
+  <div class="stage" id="stage">
+    <svg id="map" viewBox="0 0 975 610" role="img" aria-label="Map of US states with June delivery points"></svg>
+    <div class="legend">
+      <span><i class="sw"></i>Delivery point (size = orders)</span>
+      <span><i class="sw s"></i>Selected state</span>
+    </div>
+    <div class="tip" id="tip" hidden></div>
+  </div>
+    <aside class="panel" aria-live="polite">
+      <div>
+        <div class="eyebrow">Selected states</div>
+        <div class="chips" id="chips"></div>
+      </div>
+      <div class="big">
+        <div><b id="kShip">0</b><em id="kShipF"></em><span>Ship-tos</span></div>
+        <div><b id="kOrd">0</b><em id="kOrdF"></em><span>Orders</span></div>
+        <div><b id="kPal">0</b><em id="kPalF"></em><span>Pallets</span></div>
+      </div>
+      <div class="focus">Under 30 pallets; full 30-pallet loads in brackets.</div>
+      <dl class="small">
+        <dt>Avg pallets per order</dt><dd id="kAvg">–</dd>
+        <dt>Share of ticked shippers' orders</dt><dd id="kShare">0%</dd>
+      </dl>
+      <div>
+        <div class="eyebrow" style="margin-bottom:6px">Per shipper</div>
+        <div class="otab" id="otab"></div>
+      </div>
+      <div>
+        <div class="eyebrow" style="margin-bottom:6px">Orders by pickup week <span style="text-transform:none;letter-spacing:0">(grey = 30-plt)</span></div>
+        <div class="weeks" id="weeks"></div>
+      </div>
+      <div class="note">Pallets capped at 30. Known customer pickups and Puerto Rico excluded. W5 = Jun 29–30.</div>
+    </aside>
+  </div>
+
+  <div class="ledger">
+    <table>
+      <thead><tr>
+        <th data-k="sel" scope="col"></th><th data-k="s" scope="col">State</th><th data-k="ship" scope="col">Ship-tos <small>(30-plt only)</small></th>
+        <th data-k="ord" scope="col">Orders <small>(30-plt)</small></th><th data-k="pal" scope="col">Pallets <small>(30-plt)</small></th>
+        <th data-k="avg" scope="col">Avg plt &lt;30</th><th data-k="nsh" scope="col">Shippers</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script>
+const ABBR = {"Alabama":"AL","Alaska":"AK","Arizona":"AZ","Arkansas":"AR","California":"CA","Colorado":"CO","Connecticut":"CT","Delaware":"DE","District of Columbia":"DC","Florida":"FL","Georgia":"GA","Hawaii":"HI","Idaho":"ID","Illinois":"IL","Indiana":"IN","Iowa":"IA","Kansas":"KS","Kentucky":"KY","Louisiana":"LA","Maine":"ME","Maryland":"MD","Massachusetts":"MA","Michigan":"MI","Minnesota":"MN","Mississippi":"MS","Missouri":"MO","Montana":"MT","Nebraska":"NE","Nevada":"NV","New Hampshire":"NH","New Jersey":"NJ","New Mexico":"NM","New York":"NY","North Carolina":"NC","North Dakota":"ND","Ohio":"OH","Oklahoma":"OK","Oregon":"OR","Pennsylvania":"PA","Rhode Island":"RI","South Carolina":"SC","South Dakota":"SD","Tennessee":"TN","Texas":"TX","Utah":"UT","Vermont":"VT","Virginia":"VA","Washington":"WA","West Virginia":"WV","Wisconsin":"WI","Wyoming":"WY"};
+const NAME = Object.fromEntries(Object.entries(ABBR).map(([n,a])=>[a,n]));
+// points.json: {shippers:[...], points:[{c, s, la, lo, by:[[shipper, ord<30, pal<30, ord30, pal30, wk<30 x5, wk30 x5, ship-to name, ship-tos, ship-tos with <30, ship-tos with only 30-plt]]}]}
+let D = {shippers:[], points:[]};
+const sel = new Set(), shOn = new Set(); let shStored = null; let sortK = "ord", sortDir = -1;
+const fmt = d3.format(",");
+try { JSON.parse(localStorage.getItem("nlpp-sel")||"[]").forEach(x=>sel.add(x)); } catch(e){}
+try { shStored = JSON.parse(localStorage.getItem("nlpp-sh")||"null"); if(Array.isArray(shStored)) shStored.forEach(i=>shOn.add(i)); } catch(e){ shStored = null; }
+function save(){ try{ localStorage.setItem("nlpp-sel",JSON.stringify([...sel])); localStorage.setItem("nlpp-sh",JSON.stringify([...shOn])); }catch(e){} }
+
+// totals over the ticked shippers, or one shipper (only = index)
+function roll(filter, only){
+  const t = {ship:0, shipF:0, ord:0, ordF:0, pal:0, palF:0, ws:[0,0,0,0,0], wf:[0,0,0,0,0], sh:new Set()};
+  for(const p of D.points){ if(!filter(p)) continue;
+    for(const b of p.by){ if(only===undefined ? !shOn.has(b[0]) : only!==b[0]) continue;
+      t.ord+=b[1]; t.pal+=b[2]; t.ordF+=b[3]; t.palF+=b[4]; t.ship+=b[9]; t.shipF+=b[10]; t.sh.add(b[0]);
+      for(let i=0;i<5;i++){ t.ws[i]+=b[5][i]; t.wf[i]+=b[6][i]; } } }
+  t.avg = t.ord ? t.pal/t.ord : 0; t.nsh = t.sh.size; return t; }
+function stateStats(){ const m={}; for(const st of new Set(D.points.map(p=>p.s))){ const r = roll(p=>p.s===st); if(r.ord+r.ordF>0) m[st] = Object.assign({s:st}, r); } return m; }
+function pcnt(p){ let n=0; for(const b of p.by) if(shOn.has(b[0])) n+=b[1]+b[3]; return n; }
+
+const svg = d3.select("#map");
+const proj = d3.geoAlbersUsa().scale(1300).translate([487.5,305]);
+const gStates = svg.append("g"), gDots = svg.append("g"), gDepot = svg.append("g");
+const tip = document.getElementById("tip"), stage = document.getElementById("stage");
+function toggle(a){ if(!a) return; sel.has(a)?sel.delete(a):sel.add(a); render(); }
+
+fetch("states.json").then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); }).then(us=>{
+  const feats = topojson.feature(us, us.objects.states).features;
+  gStates.selectAll("path").data(feats).join("path")
+    .attr("class","state").attr("d", d3.geoPath())
+    .attr("tabindex",0).attr("role","button")
+    .attr("aria-label", d=>d.properties.name)
+    .on("click",(e,d)=>toggle(ABBR[d.properties.name]))
+    .on("keydown",(e,d)=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggle(ABBR[d.properties.name]); }})
+    .on("mousemove",(e,d)=>{ const st=stateStats()[ABBR[d.properties.name]]; showTip(e, `<b>${d.properties.name}</b><br>${st ? fmt(st.ord)+" orders under 30 plt (+"+fmt(st.ordF)+" full loads)" : "No June orders for the ticked shippers"}`); })
+    .on("mouseleave",hideTip);
+  gStates.append("path").datum(topojson.mesh(us, us.objects.states,(a,b)=>a!==b))
+    .attr("fill","none").attr("stroke","var(--panel)").attr("stroke-width",1).attr("d",d3.geoPath()).attr("pointer-events","none");
+  render();
+}).catch(()=>{ svg.append("text").attr("x",487).attr("y",305).attr("text-anchor","middle").attr("fill","currentColor").text("The state map didn't load. The table below still works."); render(); });
+
+const lb = proj([-86.4688,40.0489]);
+gDepot.append("path").attr("class","depot").attr("transform",`translate(${lb[0]},${lb[1]})`).attr("d",d3.symbol(d3.symbolStar,90)());
+gDepot.append("text").attr("class","depot-label").attr("x",lb[0]+8).attr("y",lb[1]-6).text("NewCold Lebanon");
+
+function renderDots(){
+  const data = D.points.map(p=>({p, n: pcnt(p), xy: proj([p.lo,p.la])})).filter(d=>d.xy && d.n>0).sort((a,b)=>b.n-a.n);
+  gDots.selectAll("circle").data(data, d=>d.p.la+","+d.p.lo+d.p.s).join("circle")
+    .attr("cx",d=>d.xy[0]).attr("cy",d=>d.xy[1])
+    .attr("r",d=>2+Math.sqrt(d.n)*1.5)
+    .attr("class",d=> sel.size && !sel.has(d.p.s) ? "dot dim" : "dot")
+    .on("click",(e,d)=>toggle(d.p.s))
+    .on("mousemove",(e,d)=>{ const p=d.p; showTip(e, `<b>${p.c}, ${p.s}</b><br>` + p.by.filter(b=>shOn.has(b[0])).map(b=>`${D.shippers[b[0]]}: ${b[1]} under 30 plt · ${fmt(b[2])} plt${b[3]?` + ${b[3]} full`:""}<br><span style="opacity:.75">${b[8]} ship-to${b[8]>1?"s":""}</span>`).join("<br>")); })
+    .on("mouseleave",hideTip);
+}
+
+function showTip(e, html){ const r = stage.getBoundingClientRect(); tip.innerHTML = html; tip.hidden = false;
+  let x = e.clientX - r.left + 12, y = e.clientY - r.top + 12; const w = tip.offsetWidth;
+  if (x + w > r.width - 8) x = e.clientX - r.left - w - 12; tip.style.left = x+"px"; tip.style.top = y+"px"; }
+function hideTip(){ tip.hidden = true; }
+
+function render(){
+  gStates.selectAll("path.state").classed("on", d=>sel.has(ABBR[d.properties.name])).attr("aria-pressed", d=>sel.has(ABBR[d.properties.name]));
+  renderDots();
+  const inSel = p=>sel.has(p.s);
+  const t = roll(inSel);
+  const par = n => n ? `(+${fmt(n)})` : "";
+  document.getElementById("kShip").textContent = fmt(t.ship);
+  document.getElementById("kShipF").textContent = par(t.shipF);
+  document.getElementById("kOrd").textContent = fmt(t.ord);
+  document.getElementById("kOrdF").textContent = par(t.ordF);
+  document.getElementById("kPal").textContent = fmt(t.pal);
+  document.getElementById("kPalF").textContent = par(t.palF);
+  document.getElementById("kAvg").textContent = t.ord ? t.avg.toFixed(1) : "–";
+  const base = roll(()=>true).ord;
+  document.getElementById("kShare").textContent = base ? (t.ord/base*100).toFixed(1)+"%" : "–";
+  const mx = Math.max(1,...t.ws.map((v,i)=>v+t.wf[i]));
+  document.getElementById("weeks").innerHTML = t.ws.map((v,i)=>`<div class="wk" title="Week ${i+1}: ${v} orders under 30 plt, ${t.wf[i]} full 30-plt loads"><i style="height:${Math.round((v+t.wf[i])/mx*100)}%"><u style="flex:${t.wf[i]}"></u><b style="flex:${v}"></b></i><small><em>W${i+1} ${v}</em><br>(+${t.wf[i]})</small></div>`).join("");
+  const keys = D.shippers.map((_,i)=>i).filter(i=>shOn.has(i));
+  const orows = keys.map(k=>{ const x = roll(inSel, k);
+    return `<span class="nm">${D.shippers[k]}</span><span>${fmt(x.ord)}<small>(+${fmt(x.ordF)})</small></span><span>${fmt(x.pal)}<small>(+${fmt(x.palF)})</small></span>`; }).join("");
+  document.getElementById("otab").innerHTML = !sel.size ? `<span class="empty" style="grid-column:1/-1">Select a state to see them.</span>`
+    : !keys.length ? `<span class="empty" style="grid-column:1/-1">No shippers ticked.</span>`
+    : `<span class="h">Shipper</span><span class="h">Orders</span><span class="h">Pallets</span>${orows}`;
+  const chips = document.getElementById("chips");
+  chips.innerHTML = sel.size ? [...sel].sort().map(a=>`<button class="chip" type="button" data-a="${a}" title="Remove ${NAME[a]||a}">${a} ×</button>`).join("") : `<span class="empty">None yet. Click a state.</span>`;
+  const st = Object.values(stateStats()).sort((a,b)=> sortK==="s" ? a.s.localeCompare(b.s)*-sortDir : sortK==="sel" ? (sel.has(b.s)-sel.has(a.s)) || b.ord-a.ord : (b[sortK]-a[sortK])*(-sortDir) );
+  document.getElementById("rows").innerHTML = st.map(r=>`<tr data-a="${r.s}" class="${sel.has(r.s)?"on":""}" tabindex="0">
+    <td><input type="checkbox" id="cb-${r.s}" ${sel.has(r.s)?"checked":""} tabindex="-1" aria-label="Select ${NAME[r.s]||r.s}"></td>
+    <td>${NAME[r.s]||r.s} <span style="color:var(--muted);font-family:var(--f-mono)">${r.s}</span></td>
+    <td>${fmt(r.ship)}${r.shipF?`<small>(+${fmt(r.shipF)})</small>`:""}</td><td>${fmt(r.ord)}<small>(+${fmt(r.ordF)})</small></td><td>${fmt(r.pal)}<small>(+${fmt(r.palF)})</small></td><td>${r.ord?r.avg.toFixed(1):"–"}</td><td>${r.nsh}</td></tr>`).join("");
+  save();
+}
+
+document.getElementById("rows").addEventListener("click", e=>{ const tr=e.target.closest("tr"); if(tr) toggle(tr.dataset.a); });
+document.getElementById("rows").addEventListener("keydown", e=>{ if((e.key==="Enter"||e.key===" ") && e.target.matches("tr")){ e.preventDefault(); toggle(e.target.dataset.a); }});
+document.getElementById("chips").addEventListener("click", e=>{ const b=e.target.closest(".chip"); if(b) toggle(b.dataset.a); });
+document.getElementById("clear").onclick = ()=>{ sel.clear(); render(); };
+document.querySelector("thead").addEventListener("click", e=>{ const k=e.target.dataset.k; if(!k) return; if(sortK===k) sortDir*=-1; else { sortK=k; sortDir=-1; } render(); });
+if(!sel.size) ["FL","IL","WI","GA","KY"].forEach(a=>sel.add(a));
+
+fetch("points.json").then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); }).then(j=>{
+  D = j;
+  if(!Array.isArray(shStored)) D.shippers.forEach((_,i)=>shOn.add(i));
+  const box = document.getElementById("shippers");
+  box.insertAdjacentHTML("beforeend", D.shippers.map((n,i)=>{ const o = D.points.reduce((a,p)=>a+p.by.filter(b=>b[0]===i).reduce((x,b)=>x+b[1]+b[3],0),0);
+    return `<label for="sh-${i}"><input type="checkbox" id="sh-${i}" data-i="${i}" ${shOn.has(i)?"checked":""}> ${n} <span style="color:var(--muted);font-family:var(--f-mono);font-size:12px">${fmt(o)}</span></label>`; }).join(""));
+  box.addEventListener("change", e=>{ const d=e.target.dataset.i; if(d===undefined) return; e.target.checked?shOn.add(+d):shOn.delete(+d); render(); });
+  render();
+}).catch(()=>{ document.getElementById("shippers").insertAdjacentHTML("beforeend", `<span class="empty">The June volumes didn't load. Reload the page to try again.</span>`); });
+render();
+</script>
+
+</body></html>
